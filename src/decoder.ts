@@ -1,121 +1,123 @@
-import { concat } from './deps.ts'
+import { Writer } from 'std/types.d.ts'
+import { BufReader, Buffer } from './deps.ts'
 import { logd } from './log.ts'
 import { BencodeDict, BencodeInteger, BencodeList, BencodeString, BencodeType } from './type.ts'
 import { isUtf8 } from './util.ts'
-
 export class Bdecoder {
-  private curosr = 0
-  private textDecoder: TextDecoder = new TextDecoder()
+  private td = new TextDecoder('utf-8')
+  private te = new TextEncoder()
 
-  decode(data: Uint8Array): BencodeType | null {
-    // 重置游标
-    this.curosr = 0
-    return this.parse(data)
-  }
-
-  /**
-   * 读取字节数组,默认读取一个字节
-   * @param length
-   * @returns
-   */
-  private readBytes(data: Uint8Array, length = 1): Uint8Array {
-    if (this.curosr + length > data.length) {
-      logd(
-        `[readBytes] read bytes out of range, curosr is ${this.curosr}, length is ${length}, data length is ${data.length}`
-      )
-      return new Uint8Array()
+  public async d(source: BufReader | Uint8Array | Buffer, writer?: Writer) {
+    let reader: BufReader
+    if (source instanceof BufReader) {
+      reader = source
+    } else if (source instanceof Uint8Array) {
+      reader = new BufReader(new Buffer(source))
+    } else if (source instanceof Buffer) {
+      reader = new BufReader(source)
+    } else {
+      throw new Error('reader type error')
     }
 
-    const bytes = data.slice(this.curosr, this.curosr + length)
+    // 解码数据
+    const data = await this.decode(reader)
 
-    this.curosr += length
+    // 如果传入了writer,则写入到writer中
+    if (writer) {
+      writer.write(Uint8Array.from(this.te.encode(JSON.stringify(data, null, 2))))
+    }
 
-    return bytes
+    // 返回解码后的数据
+    return data
   }
 
-  /**
-   * 回退游标
-   * @param length
-   */
-  private backCursor(length = 1) {
-    this.curosr -= length
-  }
-
-  private parse(data: Uint8Array): BencodeType | null {
+  private async decode(reader: BufReader): Promise<BencodeType | null> {
     // 读取头部字节,用于判断需要解析的数据类型
-    const bytes = this.readBytes(data)
+    // peek方法不会移动游标
+    const bytes = await reader.peek(1)
 
-    logd(`[decode] read next byte ${this.textDecoder.decode(bytes)}`)
-
-    if (bytes.length === 0) {
+    if (bytes == null || bytes.length === 0) {
       logd('[decode] head bytes is null, return null')
       return null
     }
 
+    logd(`[decode] read next byte ${this.td.decode(bytes)}`)
+
     switch (String.fromCharCode(bytes[0])) {
       case 'i':
         logd(`[decode] start parse integer`)
+        // 消耗掉头字节
+        await reader.readByte()
         // 解码整数值
-        return this.decodeInteger(data)
+        return await this.decodeInteger(reader)
       case 'l':
         logd(`[decode] start parse list`)
+        // 消耗掉头字节
+        await await reader.readByte()
         // 解码列表
-        return this.decodeList(data)
+        return this.decodeList(reader)
       case 'd':
         logd(`[decode] start parse dict`)
+        // 消耗掉头字节
+        await reader.readByte()
         // 解码字典
-        return this.decodeDict(data)
+        return await this.decodeDict(reader)
       default:
         // 除开上面三种类型,剩下的都是字节字符串
         logd(`[decode] start parse byte string`)
         // 回退游标,因为这里的头字节是长度的一部分或者长度本身,例如5:hello,后面需要用于截取指定长度的字符串
-        this.backCursor()
         // 解码字符串
-        return this.decodeByteString(data)
+        return await this.decodeByteString(reader)
     }
   }
 
-  private decodeInteger(data: Uint8Array): BencodeInteger {
+  private async decodeInteger(reader: BufReader): Promise<BencodeInteger> {
     logd(`[decodeInteger] start read int bytes length`)
 
     // 读取直到遇到'e'字节为止
-    const intBuffer = this.readUntil(data, 'e')
+    const intBuffer = await this.readUntil(reader, 'e')
 
     // 转换成数字
-    const integer = parseInt(this.textDecoder.decode(intBuffer))
+    const integer = parseInt(this.td.decode(intBuffer))
 
     logd(`[decodeInteger] decoded integer is ${integer}`)
 
     return integer
   }
 
-  private decodeByteString(data: Uint8Array): BencodeString | number[] {
+  private async decodeByteString(reader: BufReader): Promise<BencodeString | number[]> {
     logd(`[decodeByteString] start read string bytes length`)
 
     // 获取字符串的长度
-    const lengthBuffer = this.readUntil(data, ':')
+    const lengthBuffer = await this.readUntil(reader, ':')
 
     logd(`[decodeByteString] readed lengthBuffer value is ${lengthBuffer}`)
 
     // 转换成数字
-    const length = parseInt(this.textDecoder.decode(lengthBuffer))
+    const length = parseInt(this.td.decode(lengthBuffer))
 
     logd(`[decodeByteString] next string bytes length is ${length}`)
 
     // 根据长度读取字符串对应的字节数组
-    const stringBuffer = this.readBytes(data, length)
+    // 不要使用read,read不保证能够读取到指定长度的字节,例如read(5),但是缓冲区只有4个字节,那么就会返回4个字节
+    // 但是readFull会一直读取,直到读取到指定长度的字节
+    const stringBytes = await reader.readFull(new Uint8Array(length))
 
-    logd(`[decodeByteString] readed stringBuffer length is ${stringBuffer ? stringBuffer.length : 0}`)
+    if (stringBytes == null) {
+      throw new Error('read string bytes error')
+    }
 
-    const result = this.textDecoder.decode(stringBuffer)
+    logd(`[decodeByteString] readed stringBuffer length is ${stringBytes ? stringBytes.length : 0}`)
+
+    const result = this.td.decode(stringBytes)
 
     //  如果是utf8编码，转成字符串,不然后面转成json会是乱码
-    if (isUtf8(stringBuffer)) {
+    if (isUtf8(stringBytes)) {
       return result
     } else {
       logd(`[decodeByteString] string is not utf8, return number array`)
       // 否则转换成number数组,由于js中没有byte类型,所以只能用number数组来表示字节
-      return Array.from(stringBuffer)
+      return Array.from(stringBytes)
     }
   }
 
@@ -123,21 +125,26 @@ export class Bdecoder {
    * 解码列表,例如 l5:helloe 或者 l5:helloi123ee,也就是["hello"]或者["hello",123]
    * @returns list
    */
-  private decodeList(data: Uint8Array): BencodeList {
+  private async decodeList(reader: BufReader): Promise<BencodeList> {
     const list = []
 
     while (true) {
-      // 读取首字节
-      const bytes = this.readBytes(data)
+      // 用peek读取下个字节,但是不移动游标
+      const bytes = await reader.peek(1)
 
-      if (bytes.length === 0 || String.fromCharCode(bytes[0]) === 'e') {
+      // 如果读取到的是null,说明已经读取到了文件末尾,解析完毕
+      if (bytes === null || bytes.length === 0) {
         break
       }
 
-      // 如果读取到的不是'e',回退游标,继续解析
-      this.backCursor()
+      // 如果读取到的是'e',继续解析下一个字节
+      if (String.fromCharCode(bytes[0]) === 'e') {
+        // 记得消耗掉'e'字节
+        await reader.readByte()
+        break
+      }
 
-      const item = this.parse(data)
+      const item = await this.decode(reader)
 
       if (item == null) break
 
@@ -151,28 +158,33 @@ export class Bdecoder {
    * 解码字典
    * @returns object
    */
-  private decodeDict(data: Uint8Array): BencodeDict {
+  private async decodeDict(reader: BufReader): Promise<BencodeDict> {
     const obj = {} as any
     while (true) {
-      // 读取首字节
-      const bytes = this.readBytes(data)
+      // 用peek读取下个字节,但是不移动游标
+      const bytes = await reader.peek(1)
 
-      if (bytes.length === 0 || String.fromCharCode(bytes[0]) === 'e') {
+      // 如果读取到的是null,说明已经读取到了文件末尾,解析完毕
+      if (bytes === null || bytes.length === 0) {
         break
       }
 
-      // 如果读取到的不是'e',回退游标,继续解析
-      this.backCursor()
+      // 如果读取到的是'e',继续解析下一个字节
+      if (String.fromCharCode(bytes[0]) === 'e') {
+        // 记得消耗掉'e'字节
+        await reader.readByte()
+        break
+      }
 
       logd(`[decodeDict] start parse dict key`)
       // 解析key
-      const key = this.decodeByteString(data).toString()
+      const key = (await this.decodeByteString(reader)).toString()
 
       logd(`[decodeDict] key is '${key}'`)
 
       logd(`[decodeDict] start parse dict value`)
       // 解析value
-      obj[key] = this.parse(data)
+      obj[key] = await this.decode(reader)
       // logd(`[decodeDict] value is '${JSON.stringify(obj[key])}'`)
     }
 
@@ -184,27 +196,33 @@ export class Bdecoder {
    * 注意: stop 字节已经被读取过了,游标已经移动到下一个字节
    * @param stop
    */
-  private readUntil(data: Uint8Array, stop: string): Uint8Array {
+  private async readUntil(reader: BufReader, stop: string): Promise<Uint8Array> {
     logd(`[readUntil] '${stop}'`)
 
     // 用于存储读取到的字节
-    const buffers: Uint8Array[] = []
+    const buffer: Buffer = new Buffer()
+
     while (true) {
-      // 读取一个字节
-      const bytes = this.readBytes(data)
+      // 消耗一个字节
+      const byte = await reader.readByte()
 
-      logd(`[readUntil] readed bytes is ${bytes}`)
+      logd(`[readUntil] readed bytes is ${byte}`)
 
-      // 如果已经读取到了文件末尾,或者读取到的字节是stop字节,则返回
-      if (bytes.length === 0 || String.fromCharCode(...bytes) === stop) {
+      // 如果读取到的是null,说明已经读取到了文件末尾,但是都没有遇到stop字节,说明文件格式错误
+      if (byte === null) {
+        throw new Error(`read until '${stop}' error, reached end of file`)
+      }
+
+      // 读取到的字节是stop字节,则返回
+      if (String.fromCharCode(byte) === stop) {
         logd(`[readUntil] reached stop char`)
         break
       }
 
       // 拼接字节
-      buffers.push(bytes)
+      buffer.write(Uint8Array.from([byte]))
     }
 
-    return concat(...buffers)
+    return buffer.bytes()
   }
 }

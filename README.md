@@ -20,7 +20,7 @@ Bencode encoding and decoding.
 
   // encode result is a Unit8Array
   // if encode a 'hello' string, result is [53, 58, 104, 101, 108, 108, 111], whitch is '5:hello' ascii code array
-  const result = await encoder.encode(data)
+  const result = await encoder.e(data)
 
   // write to file
   Deno.writeFileSync('./bencode', result)
@@ -42,7 +42,8 @@ Bencode encoding and decoding.
 
   // if string is valid utf-8 string, it will be decoded to string, like 'hello'
   // or it will be decoded to Uint8Array, like [number, number, number, ...], such as pieces in torrent file
-  const result = decoder.decode(Deno.readFileSync(torrent))
+  // d(source: BufReader | Uint8Array | Buffer, writer?: Writer): source can be Uint8Array or Buffer or BufReader, writer is optional,if you want to write result to stdout or file, you can pass a Writer
+  const result = await decoder.d(Deno.readFileSync(torrent))
 
   // result is a object, like this:
 
