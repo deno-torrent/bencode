@@ -7,7 +7,7 @@ Bencode encoding and decoding.
 ### Encode
 
 ```typescript
-  import { Bencoder } from 'https://deno.land/x/dt_bencode@0.0.1/mod.ts'
+  import { Bencoder } from 'https://deno.land/x/dt_bencode/mod.ts'
 
   const data = 'hello'
   // const data = 123
@@ -32,7 +32,7 @@ Bencode encoding and decoding.
 ### Decode
 
 ```typescript
-  import { Bdecoder } from 'https://deno.land/x/dt_bencode@0.0.1/mod.ts'
+  import { Bdecoder } from 'https://deno.land/x/dt_bencode/mod.ts'
 
   // decode bitTorrent file
   const torrent = './ubuntu-22.04.2-live-server-amd64.iso.torrent'
