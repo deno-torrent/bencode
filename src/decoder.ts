@@ -1,4 +1,4 @@
-import { Writer } from 'std/types.d.ts'
+import { Reader, Writer } from 'std/types.d.ts'
 import { BufReader, Buffer } from './deps.ts'
 import { logd } from './log.ts'
 import { BencodeDict, BencodeInteger, BencodeList, BencodeString, BencodeType } from './type.ts'
@@ -7,17 +7,12 @@ export class Bdecoder {
   private td = new TextDecoder('utf-8')
   private te = new TextEncoder()
 
-  public async d(source: BufReader | Uint8Array | Buffer, writer?: Writer) {
-    let reader: BufReader
-    if (source instanceof BufReader) {
-      reader = source
-    } else if (source instanceof Uint8Array) {
-      reader = new BufReader(new Buffer(source))
-    } else if (source instanceof Buffer) {
-      reader = new BufReader(source)
-    } else {
-      throw new Error('reader type error')
+  public async d(source: Reader | Uint8Array | Buffer, writer?: Writer) {
+    if (source instanceof Uint8Array) {
+      source = new Buffer(source)
     }
+    
+    const reader: BufReader = new BufReader(source)
 
     // 解码数据
     const data = await this.decode(reader)
