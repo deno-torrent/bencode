@@ -114,11 +114,10 @@ export class Bdecoder {
     //  如果是utf8编码，转成字符串,不然后面转成json会是乱码
     if (isUtf8(stringBytes)) {
       return result
-    } else {
-      logd(`[decodeByteString] string is not utf8, return number array`)
-      // 否则转换成number数组,由于js中没有byte类型,所以只能用number数组来表示字节
-      return Array.from(stringBytes)
     }
+
+    logd(`[decodeByteString] string is not utf8, return Uint8Array`)
+    return stringBytes
   }
 
   /**
