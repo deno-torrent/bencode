@@ -69,6 +69,7 @@ Deno.test('decode dictionary sort', async () => {
 Deno.test('decode empty dictionary', async () => {
   assertEquals(await decoder.d(textEncoder.encode('de')), {})
 })
+
 // torrent文件解码测试
 Deno.test('decode torrent', async () => {
   // torrent文件路径
@@ -87,4 +88,16 @@ Deno.test('decode torrent', async () => {
   assertEquals(torrentObj['info']['piece length'], 262144)
   // 校验pieces数量
   assertEquals(torrentObj['info']['pieces'].length, 150760)
+})
+
+// 不解码字节字符串测试
+Deno.test('decode byte string', async () => {
+  const decoder = new Bdecoder({
+    decodeByteString: false
+  })
+
+  const encodedBytes = Uint8Array.from([53, 58, 104, 101, 108, 108, 111]) // '5:hello'
+  const decodedBytes = Uint8Array.from([104, 101, 108, 108, 111]) // 'hello'
+
+  assertEquals(await decoder.d(encodedBytes), decodedBytes)
 })

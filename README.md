@@ -38,7 +38,11 @@ Bencode encoding and decoding.
   const torrent = './ubuntu-22.04.2-live-server-amd64.iso.torrent'
 
   // create decoder
-  const decoder = new Bdecoder()
+  const decoder = new Bdecoder({
+    // defualt is true, byte string will be decoded to string, except it is not valid utf-8 string
+    // if you don't want to decode byte string to string, you can set decodeByteString to false
+     decodeByteString: true 
+  })
 
   // if string is valid utf-8 string, it will be decoded to string, like 'hello'
   // or it will be decoded to Uint8Array, like [number, number, number, ...], such as pieces in torrent file

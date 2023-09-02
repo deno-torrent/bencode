@@ -3,15 +3,26 @@ import { BufReader, Buffer } from './deps.ts'
 import { logd } from './log.ts'
 import { BencodeDict, BencodeInteger, BencodeList, BencodeString, BencodeType } from './type.ts'
 import { isUtf8 } from './util.ts'
+
+export type DecodeOption = {
+  // 是否解码字节字符串,默认为true,如果为false,则返回Uint8Array。当为true的时候也不一定会返回字符串,如果字符串不是utf8编码,则返回Uint8Array
+  decodeByteString: boolean
+}
+
 export class Bdecoder {
-  private td = new TextDecoder('utf-8')
-  private te = new TextEncoder()
+  #td = new TextDecoder('utf-8')
+  #te = new TextEncoder()
+  #option: DecodeOption
+
+  constructor(option: DecodeOption = { decodeByteString: true }) {
+    this.#option = option
+  }
 
   public async d(source: Reader | Uint8Array | Buffer, writer?: Writer) {
     if (source instanceof Uint8Array) {
       source = new Buffer(source)
     }
-    
+
     const reader: BufReader = new BufReader(source)
 
     // 解码数据
@@ -19,7 +30,7 @@ export class Bdecoder {
 
     // 如果传入了writer,则写入到writer中
     if (writer) {
-      writer.write(Uint8Array.from(this.te.encode(JSON.stringify(data, null, 2))))
+      writer.write(Uint8Array.from(this.#te.encode(JSON.stringify(data, null, 2))))
     }
 
     // 返回解码后的数据
@@ -36,7 +47,7 @@ export class Bdecoder {
       return null
     }
 
-    logd(`[decode] read next byte ${this.td.decode(bytes)}`)
+    logd(`[decode] read next byte ${this.#td.decode(bytes)}`)
 
     switch (String.fromCharCode(bytes[0])) {
       case 'i':
@@ -48,7 +59,7 @@ export class Bdecoder {
       case 'l':
         logd(`[decode] start parse list`)
         // 消耗掉头字节
-        await await reader.readByte()
+        await reader.readByte()
         // 解码列表
         return this.decodeList(reader)
       case 'd':
@@ -73,7 +84,7 @@ export class Bdecoder {
     const intBuffer = await this.readUntil(reader, 'e')
 
     // 转换成数字
-    const integer = parseInt(this.td.decode(intBuffer))
+    const integer = parseInt(this.#td.decode(intBuffer))
 
     logd(`[decodeInteger] decoded integer is ${integer}`)
 
@@ -89,7 +100,7 @@ export class Bdecoder {
     logd(`[decodeByteString] readed lengthBuffer value is ${lengthBuffer}`)
 
     // 转换成数字
-    const length = parseInt(this.td.decode(lengthBuffer))
+    const length = parseInt(this.#td.decode(lengthBuffer))
 
     logd(`[decodeByteString] next string bytes length is ${length}`)
 
@@ -104,7 +115,12 @@ export class Bdecoder {
 
     logd(`[decodeByteString] readed stringBuffer length is ${stringBytes ? stringBytes.length : 0}`)
 
-    const result = this.td.decode(stringBytes)
+    const result = this.#td.decode(stringBytes)
+
+    if (!this.#option.decodeByteString) {
+      logd(`[decodeByteString] decodeByteString is false, return Uint8Array`)
+      return stringBytes
+    }
 
     //  如果是utf8编码，转成字符串,不然后面转成json会是乱码
     if (isUtf8(stringBytes)) {
