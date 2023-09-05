@@ -38,14 +38,10 @@ Bencode encoding and decoding.
   const torrent = './ubuntu-22.04.2-live-server-amd64.iso.torrent'
 
   // create decoder
-  const decoder = new Bdecoder({
-    // defualt is true, byte string will be decoded to string, except it is not valid utf-8 string
-    // if you don't want to decode byte string to string, you can set decodeByteString to false
-     decodeByteString: true 
-  })
+  const decoder = new Bdecoder()
 
   // if string is valid utf-8 string, it will be decoded to string, like 'hello'
-  // or it will be decoded to Uint8Array, like [number, number, number, ...], such as pieces in torrent file
+  // or it will be decoded to Uint8Array string (it's a custom format), like 'Unit8Array[number, number, number, ...]', such as pieces in torrent file
   // d(source: BufReader | Uint8Array | Buffer, writer?: Writer): source can be Uint8Array or Buffer or BufReader, writer is optional,if you want to write result to stdout or file, you can pass a Writer
   const result = await decoder.d(Deno.readFileSync(torrent))
 
@@ -68,12 +64,26 @@ Bencode encoding and decoding.
   //   "length": 1975971840,
   //   "name": "ubuntu-22.04.2-live-server-amd64.iso",
   //   "piece length": 262144,
-  //   "pieces": [
-  //     42,
-  //     56,
-  //     162,
-  //     55,
-  // ....
+  //   "pieces": 'Unit8Array[42,56,162,55,...]'
+
+  // the pieces has non-utf8 string, so it will be decoded to a string which is a Uint8Array string, like 'Unit8Array[number, number, number, ...]'
+  // if you want to confirm it is a normal string or a undecodding string, you can use isUndecoingStr function
+  const isNotUtf8ByteStr = Bdecoder.isNotUtf8ByteStr(result.info.pieces)
+  // if you want to convert it to Uint8Array, you can use toUint8Array function
+  const bytes = Bdecoder.toUnit8Array(result.info.pieces)
+
+  // This is very useful. When you want to parse the scrape of tracker, the response of tracker is a bencode dictionary. Each key is info_hash, because the key in the Javascript object can only be a string, but the info_hash cannot be converted to the UTF-8 valid character string. So bencode converts it into a Unit8Array string. At this time, you can use the toUnit8Array function to convert it to Unit8Array
+
+  // e.g a part of tracker scrape response
+  //{
+  // "Unit8Array[1,130,204,22,191,60,202,23,33,183,201,186,164,237,83,142,229,127,187,241]": {
+  //   complete: 14,
+  //   downloaded: 0,
+  //   incomplete: 0,
+  //   name: "kubuntu-16.04.6-desktop-i386.iso"
+  // },
+  // ...
+  //}
 ```
 
 ## Test

@@ -90,14 +90,34 @@ Deno.test('decode torrent', async () => {
   assertEquals(torrentObj['info']['pieces'].length, 150760)
 })
 
-// 不解码字节字符串测试
-Deno.test('decode byte string', async () => {
-  const decoder = new Bdecoder({
-    decodeByteString: false
-  })
+// 解码当含有非utf8编码的字节字符串作为字典的key时
+Deno.test('decode byte string as dict key', async () => {
+  const decoder = new Bdecoder()
 
-  const encodedBytes = Uint8Array.from([53, 58, 104, 101, 108, 108, 111]) // '5:hello'
-  const decodedBytes = Uint8Array.from([104, 101, 108, 108, 111]) // 'hello'
+  const bytes = Deno.readFileSync(Deno.cwd() + '/test/tracker/ubuntu_tracker_scrape')
 
-  assertEquals(await decoder.d(encodedBytes), decodedBytes)
+  const result = (await decoder.d(bytes)) as {
+    files: {
+      // 这里的key是info_hash,是一个字节字符串,由于不是utf8编码,所以无法解码为字符串,否则会丢失数据
+      // 所以返回的形式是"Unit8Array[xx,xx,xx,xx,xx,xx,xx,xx,xx,xx]"这种字符串形式
+      [key: string]: {
+        complete: number
+        downloaded: number
+        incomplete: number
+        name: string
+      }
+    }
+  }
+
+  assertEquals(
+    Object.keys(result.files)[0],
+    'Unit8Array[0,70,120,242,226,120,16,48,188,87,115,122,135,250,247,170,251,23,79,248]'
+  )
+
+  assertEquals(true, Bdecoder.isNotUtf8ByteStr(Object.keys(result.files)[0]))
+
+  assertEquals(
+    Bdecoder.toUnit8Array(Object.keys(result.files)[0]),
+    Uint8Array.from([0, 70, 120, 242, 226, 120, 16, 48, 188, 87, 115, 122, 135, 250, 247, 170, 251, 23, 79, 248])
+  )
 })
