@@ -12,11 +12,6 @@ export type DecodeOption = {
 export class Bdecoder {
   #td = new TextDecoder('utf-8')
   #te = new TextEncoder()
-  #option: DecodeOption
-
-  constructor(option: DecodeOption = { decodeByteString: true }) {
-    this.#option = option
-  }
 
   public async d(source: Reader | Uint8Array | Buffer, writer?: Writer) {
     if (source instanceof Uint8Array) {
@@ -91,7 +86,7 @@ export class Bdecoder {
     return integer
   }
 
-  private async decodeByteString(reader: BufReader): Promise<BencodeString | number[]> {
+  private async decodeByteString(reader: BufReader): Promise<BencodeString | Uint8Array> {
     logd(`[decodeByteString] start read string bytes length`)
 
     // 获取字符串的长度
@@ -117,16 +112,12 @@ export class Bdecoder {
 
     const result = this.#td.decode(stringBytes)
 
-    if (!this.#option.decodeByteString) {
-      logd(`[decodeByteString] decodeByteString is false, return Uint8Array`)
-      return stringBytes
-    }
-
-    //  如果是utf8编码，转成字符串,不然后面转成json会是乱码
+    // 如果是utf8编码，转成字符串
     if (isUtf8(stringBytes)) {
       return result
     }
 
+    // 否则返回Uint8Array,不然转换成字符串后会丢失数据
     logd(`[decodeByteString] string is not utf8, return Uint8Array`)
     return stringBytes
   }
@@ -188,7 +179,13 @@ export class Bdecoder {
 
       logd(`[decodeDict] start parse dict key`)
       // 解析key
-      const key = (await this.decodeByteString(reader)).toString()
+      let key = await this.decodeByteString(reader)
+
+      // 处理当返回的key是Uint8Array的情况,因为此时的byte string中包含了非utf8编码的字符,导致转换成JS字符串后可能会丢失数据
+      // 所以这里直接把Unit8Array转换数组
+      if (key instanceof Uint8Array) {
+        key = `Unit8Array[${key.toString()}]`
+      }
 
       logd(`[decodeDict] key is '${key}'`)
 
@@ -234,5 +231,68 @@ export class Bdecoder {
     }
 
     return buffer.bytes()
+  }
+
+  /**
+   * 将没有解码的字节字符串转换成Uint8Array,例如Unit8Array[1,2,3]这种格式的字符串，'Unit8Array[1,2,3]' => Uint8Array.from([1,2,3])
+   * @param value Unit8Array[1,2,3]这种格式的字符串
+   * @returns Uint8Array,如果转换失败,则返回undefined
+   */
+  static byteKeyToUint8Array(value: string): Uint8Array | undefined {
+    if (!this.isByteKey(value)) {
+      return undefined
+    }
+
+    const elements = value.replace('Unit8Array[', '').replace(']', '').split(',')
+    const bytes = new Uint8Array(elements.length)
+
+    for (let i = 0; i < elements.length; i++) {
+      bytes[i] = parseInt(elements[i])
+    }
+
+    return bytes
+  }
+
+  /**
+   * 只有在字典(dict)的key不是一个有效的utf8编码的字符串时,才会返回true
+   * 判断字符串是否是未解码的字节字符串,例如Unit8Array[1,2,3]这种格式的字符串
+   *
+   * 由于字节字符串中可能包含非utf8编码的字符,所以无法转换成字符串,因为转换成字符串后可能会丢失数据,
+   *
+   * 所以返回了一个Unit8Array[1,2,3]这种格式的字符串,这个字符串可以通过undecodingByteString2Unit8Array方法转换成Uint8Array
+   * @param keyOfDict 字典的key
+   * @returns true or false
+   */
+  static isByteKey(keyOfDict: string) {
+    if (typeof keyOfDict !== 'string') {
+      return false
+    }
+
+    // 校验格式
+    if (!keyOfDict.startsWith('Unit8Array[') || !keyOfDict.endsWith(']')) {
+      return false
+    }
+
+    // 获取数组元素,每个元素都是一个integer,长度8位,范围0-255
+    const elements = keyOfDict.replace('Unit8Array[', '').replace(']', '').split(',')
+
+    // 校验每个元素是否是integer,并且范围在0-255之间
+    try {
+      for (const element of elements) {
+        const num = parseInt(element)
+        if (!Number.isInteger(num)) {
+          return false
+        }
+
+        if (num < 0 || num > 255) {
+          return false
+        }
+      }
+    } catch (_) {
+      return false
+    }
+
+    // 校验通过
+    return true
   }
 }
