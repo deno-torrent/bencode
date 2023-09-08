@@ -184,7 +184,7 @@ export class Bdecoder {
       // 处理当返回的key是Uint8Array的情况,因为此时的byte string中包含了非utf8编码的字符,导致转换成JS字符串后可能会丢失数据
       // 所以这里直接把Unit8Array转换数组
       if (key instanceof Uint8Array) {
-        key = `Unit8Array[${key.toString()}]`
+        key = `Unit8Array[${Array.from(key).join(',')}]`
       }
 
       logd(`[decodeDict] key is '${key}'`)
