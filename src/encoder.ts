@@ -1,4 +1,4 @@
-import { Buffer } from './deps.ts'
+import { Buffer } from 'std/io/mod.ts'
 import { logd } from './log.ts'
 
 import {

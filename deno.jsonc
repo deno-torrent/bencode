@@ -1,6 +1,6 @@
 {
     "imports": {
-        "std/": "https://deno.land/std@0.205.0/"
+        "std/": "https://deno.land/std@0.217.0/"
     },
     "tasks": {
         "test": "deno test --allow-read"

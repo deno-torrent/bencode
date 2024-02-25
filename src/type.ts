@@ -1,4 +1,4 @@
-import { Buffer } from './deps.ts'
+import { Buffer } from 'std/io/mod.ts'
 
 export type BencodeInteger = number
 export type BencodeDict = { [key: string]: BencodeType }

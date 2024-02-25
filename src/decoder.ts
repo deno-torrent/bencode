@@ -1,5 +1,4 @@
-import { Reader, Writer } from 'std/types.d.ts'
-import { BufReader, Buffer } from './deps.ts'
+import { BufReader, Buffer, Reader, Writer } from 'std/io/mod.ts'
 import { logd } from './log.ts'
 import { BencodeDict, BencodeInteger, BencodeList, BencodeString, BencodeType } from './type.ts'
 import { isUtf8 } from './util.ts'
