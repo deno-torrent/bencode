@@ -1,0 +1,9 @@
+# Deno cache
+.deno/
+
+# Editor
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
