@@ -1,0 +1,65 @@
+name: Publish JSR
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: jsr-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish release to JSR
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: latest
+          cache: true
+
+      - name: Validate release version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $RELEASE_TAG"
+            exit 1
+          fi
+
+          tag_version="${RELEASE_TAG#v}"
+          package_version="$(deno eval 'console.log(JSON.parse(Deno.readTextFileSync("deno.json")).version)')"
+
+          if [[ "$tag_version" != "$package_version" ]]; then
+            echo "Release tag version: $tag_version"
+            echo "deno.json version:   $package_version"
+            echo "Release tag and package version must match."
+            exit 1
+          fi
+
+      - name: Run quality gates
+        run: |
+          deno task fmt
+          deno task lint
+          deno task check
+          deno task test
+
+      - name: Verify JSR package
+        run: deno publish --dry-run
+
+      - name: Publish to JSR
+        run: deno publish

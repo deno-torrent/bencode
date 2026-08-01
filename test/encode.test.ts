@@ -1,140 +1,92 @@
-import { assertEquals, assertThrows } from '@std/assert'
-import { BencodeEncodeError, encode } from '../mod.ts'
+import { assertEquals, assertThrows } from "@std/assert";
+import {
+  type BencodeDict,
+  BencodeEncodeError,
+  type BencodeKey,
+  type BencodeValue,
+  encode,
+} from "../mod.ts";
 
-const te = new TextEncoder()
-const enc = (s: string) => te.encode(s)
+const te = new TextEncoder();
+const text = (value: string) => te.encode(value);
+const dict = (...entries: [BencodeKey, BencodeValue][]): BencodeDict =>
+  new Map(entries);
 
-// ── Integers ──────────────────────────────────────────────────────────────────
-
-Deno.test('encode: positive integer', () => {
-  assertEquals(encode(123), enc('i123e'))
-})
-
-Deno.test('encode: negative integer', () => {
-  assertEquals(encode(-123), enc('i-123e'))
-})
-
-Deno.test('encode: zero', () => {
-  assertEquals(encode(0), enc('i0e'))
-})
-
-Deno.test('encode: MAX_SAFE_INTEGER', () => {
-  assertEquals(encode(Number.MAX_SAFE_INTEGER), enc(`i${Number.MAX_SAFE_INTEGER}e`))
-})
-
-Deno.test('encode: MIN_SAFE_INTEGER', () => {
-  assertEquals(encode(Number.MIN_SAFE_INTEGER), enc(`i${Number.MIN_SAFE_INTEGER}e`))
-})
-
-Deno.test('encode: float throws BencodeEncodeError', () => {
-  assertThrows(() => encode(1.5), BencodeEncodeError)
-})
-
-Deno.test('encode: NaN throws BencodeEncodeError', () => {
-  assertThrows(() => encode(NaN), BencodeEncodeError)
-})
-
-Deno.test('encode: Infinity throws BencodeEncodeError', () => {
-  assertThrows(() => encode(Infinity), BencodeEncodeError)
-})
-
-// ── Strings ───────────────────────────────────────────────────────────────────
-
-Deno.test('encode: ASCII string', () => {
-  assertEquals(encode('hello'), enc('5:hello'))
-})
-
-Deno.test('encode: empty string', () => {
-  assertEquals(encode(''), enc('0:'))
-})
-
-Deno.test('encode: UTF-8 multibyte string (length prefix = byte count, not char count)', () => {
-  // '中文' = 2 chars but 6 UTF-8 bytes → prefix must be "6:", not "2:"
-  assertEquals(encode('中文'), new Uint8Array([54, 58, ...te.encode('中文')]))
-})
-
-Deno.test('encode: emoji string (4-byte codepoint)', () => {
-  // '🎉' = 1 char but 4 UTF-8 bytes → prefix must be "4:"
-  assertEquals(encode('🎉'), new Uint8Array([52, 58, ...te.encode('🎉')]))
-})
-
-Deno.test('encode: mixed ASCII and CJK', () => {
-  // 'a中' = 2 chars but 4 UTF-8 bytes
-  assertEquals(encode('a中'), new Uint8Array([52, 58, ...te.encode('a中')]))
-})
-
-// ── Uint8Array ────────────────────────────────────────────────────────────────
-
-Deno.test('encode: Uint8Array of ASCII bytes', () => {
-  assertEquals(encode(new Uint8Array([0x68, 0x65, 0x6c, 0x6c, 0x6f])), enc('5:hello'))
-})
-
-Deno.test('encode: Uint8Array with non-UTF-8 bytes', () => {
-  assertEquals(encode(new Uint8Array([0xff, 0xfe])), new Uint8Array([50, 58, 0xff, 0xfe]))
-})
-
-Deno.test('encode: empty Uint8Array', () => {
-  assertEquals(encode(new Uint8Array(0)), enc('0:'))
-})
-
-// ── Lists ─────────────────────────────────────────────────────────────────────
-
-Deno.test('encode: simple integer list', () => {
-  assertEquals(encode([1, 2, 3]), enc('li1ei2ei3ee'))
-})
-
-Deno.test('encode: empty list', () => {
-  assertEquals(encode([]), enc('le'))
-})
-
-Deno.test('encode: list with empty string', () => {
-  assertEquals(encode(['']), enc('l0:e'))
-})
-
-Deno.test('encode: mixed-type list', () => {
+Deno.test("encode: supported integers", () => {
+  assertEquals(encode(0), text("i0e"));
+  assertEquals(encode(123), text("i123e"));
+  assertEquals(encode(-123), text("i-123e"));
   assertEquals(
-    encode([1, 'hello', [1, 2, 3], { a: 1, b: 2 }]),
-    enc('li1e5:helloli1ei2ei3eed1:ai1e1:bi2eee')
-  )
-})
+    encode(Number.MAX_SAFE_INTEGER),
+    text(`i${Number.MAX_SAFE_INTEGER}e`),
+  );
+});
 
-Deno.test('encode: nested lists', () => {
-  assertEquals(encode([[1, 2], [3, 4]]), enc('lli1ei2eeli3ei4eee'))
-})
+Deno.test("encode: invalid numbers throw", () => {
+  for (const value of [1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assertThrows(() => encode(value), BencodeEncodeError);
+  }
+});
 
-// ── Dicts ─────────────────────────────────────────────────────────────────────
-
-Deno.test('encode: simple dict', () => {
-  assertEquals(encode({ a: 1, b: 2 }), enc('d1:ai1e1:bi2ee'))
-})
-
-Deno.test('encode: dict keys are sorted lexicographically', () => {
-  // Keys fed in reverse order — output must still be sorted
-  assertEquals(encode({ z: 3, a: 1, m: 2 }), enc('d1:ai1e1:mi2e1:zi3ee'))
-})
-
-Deno.test('encode: empty dict', () => {
-  assertEquals(encode({}), enc('de'))
-})
-
-Deno.test('encode: nested dict', () => {
+Deno.test("encode: strings and raw bytes use byte lengths", () => {
+  assertEquals(encode("hello"), text("5:hello"));
+  assertEquals(encode(""), text("0:"));
+  assertEquals(encode("中文"), new Uint8Array([54, 58, ...te.encode("中文")]));
+  assertEquals(encode(new Uint8Array()), text("0:"));
   assertEquals(
-    encode({ info: { name: 'test', length: 1024 } }),
-    enc('d4:infod6:lengthi1024e4:name4:testee')
-  )
-})
+    encode(new Uint8Array([0xff, 0xfe])),
+    new Uint8Array([50, 58, 0xff, 0xfe]),
+  );
+});
 
-// ── BitTorrent-specific ───────────────────────────────────────────────────────
+Deno.test("encode: large output grows without chunk accumulation", () => {
+  const result = encode("x".repeat(100_000));
+  assertEquals(result.length, 100_007);
+  assertEquals(result.slice(0, 7), text("100000:"));
+});
 
-Deno.test('encode: dict with binary Uint8Array value (torrent pieces)', () => {
-  const pieces = new Uint8Array([0xaa, 0xf4, 0xc6, 0x1d, 0xdc, 0xc5, 0xe8, 0xa2, 0xda, 0xbe])
-  const result = encode({ pieces })
-  const expected = new Uint8Array([
-    100,                                                                // 'd'
-    54, 58, 112, 105, 101, 99, 101, 115,                              // '6:pieces'
-    49, 48, 58,                                                        // '10:'
-    0xaa, 0xf4, 0xc6, 0x1d, 0xdc, 0xc5, 0xe8, 0xa2, 0xda, 0xbe,     // raw bytes
-    101                                                                // 'e'
-  ])
-  assertEquals(result, expected)
-})
+Deno.test("encode: arrays and Maps are recursive containers", () => {
+  assertEquals(encode([]), text("le"));
+  assertEquals(encode(new Map()), text("de"));
+  assertEquals(
+    encode([1, "hello", dict(["a", 2])]),
+    text("li1e5:hellod1:ai2eee"),
+  );
+});
+
+Deno.test("encode: dictionary keys are sorted by raw bytes", () => {
+  assertEquals(
+    encode(dict(["z", 3], ["a", 1], ["m", 2])),
+    text("d1:ai1e1:mi2e1:zi3ee"),
+  );
+  assertEquals(encode(dict(["😀", 1], ["é", 2])), text("d2:éi2e4:😀i1ee"));
+  assertEquals(
+    encode(dict([new Uint8Array([0xff]), 1], ["é", 2])),
+    new Uint8Array([...text("d2:éi2e1:"), 0xff, ...text("i1ee")]),
+  );
+});
+
+Deno.test("encode: wire-equivalent dictionary keys are rejected", () => {
+  assertThrows(
+    () => encode(dict(["a", 1], [new Uint8Array([0x61]), 2])),
+    BencodeEncodeError,
+  );
+});
+
+Deno.test("encode: plain objects are no longer dictionaries in 2.0", () => {
+  assertThrows(() => encode({ a: 1 } as never), BencodeEncodeError);
+  assertThrows(() => encode(null as never), BencodeEncodeError);
+  assertThrows(() => encode(true as never), BencodeEncodeError);
+});
+
+Deno.test("encode: cyclic containers throw", () => {
+  const list: BencodeValue[] = [];
+  list.push(list);
+  assertThrows(() => encode(list), BencodeEncodeError);
+
+  const first = new Map<string, BencodeValue>();
+  const second = new Map<string, BencodeValue>();
+  first.set("second", second);
+  second.set("first", first);
+  assertThrows(() => encode(first), BencodeEncodeError);
+});

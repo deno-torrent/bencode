@@ -1,33 +1,31 @@
-/**
- * Bencode type definitions and custom error classes.
- * @module
- */
+/** Bencode type definitions and custom error classes. */
+
+/** A safe JavaScript integer representable by the 2.0 numeric API. */
+export type BencodeInteger = number;
+
+/** A UTF-8 string or an explicitly binary byte string. */
+export type BencodeByteString = string | Uint8Array;
+
+/** A dictionary key with an exact on-wire representation. */
+export type BencodeKey = BencodeByteString;
+
+/** An ordered sequence of bencode values. */
+export type BencodeList = BencodeValue[];
 
 /**
- * Bencode integer.
- * Must be a safe integer within `[Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER]`.
+ * A Bencode dictionary.
+ *
+ * `Map` is intentional: it preserves binary keys without converting them to a
+ * lossy string representation. Encoding sorts entries by their wire bytes.
  */
-export type BencodeInteger = number
+export type BencodeDict = Map<BencodeKey, BencodeValue>;
 
-/**
- * Bencode byte string.
- * - `string` values are UTF-8 encoded on the wire.
- * - `Uint8Array` values are written as raw bytes.
- */
-export type BencodeByteString = string | Uint8Array
-
-/** Bencode list — an ordered sequence of bencode values. */
-export type BencodeList = BencodeValue[]
-
-/**
- * Bencode dictionary — string-keyed map.
- * Keys are sorted lexicographically (by raw bytes) when encoding.
- * Non-UTF-8 binary keys are represented as `"Uint8Array[b0,b1,...]"` strings on decode.
- */
-export type BencodeDict = { [key: string]: BencodeValue }
-
-/** Union of all supported bencode value types. */
-export type BencodeValue = BencodeInteger | BencodeByteString | BencodeList | BencodeDict
+/** All values accepted by the 2.0 encoder and returned by the decoder. */
+export type BencodeValue =
+  | BencodeInteger
+  | BencodeByteString
+  | BencodeList
+  | BencodeDict;
 
 /**
  * Thrown when encoding fails due to an invalid or unsupported value.
@@ -39,8 +37,8 @@ export type BencodeValue = BencodeInteger | BencodeByteString | BencodeList | Be
  */
 export class BencodeEncodeError extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'BencodeEncodeError'
+    super(message);
+    this.name = "BencodeEncodeError";
   }
 }
 
@@ -53,7 +51,7 @@ export class BencodeEncodeError extends Error {
  */
 export class BencodeDecodeError extends Error {
   constructor(message: string) {
-    super(message)
-    this.name = 'BencodeDecodeError'
+    super(message);
+    this.name = "BencodeDecodeError";
   }
 }
