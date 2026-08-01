@@ -33,10 +33,11 @@ Returns one complete `BencodeValue` and rejects malformed or non-canonical input
 interface DecodeOptions {
   maxBytes?: number
   maxDepth?: number
+  allowUnsortedKeys?: boolean
 }
 ```
 
-Defaults are `maxBytes = 64 * 1024 * 1024` and `maxDepth = 1000`.
+Defaults are `maxBytes = 64 * 1024 * 1024`, `maxDepth = 1000`, and `allowUnsortedKeys = false`. Decoding is canonical and strict by default. Set `allowUnsortedKeys: true` only for compatibility with a known protocol implementation that emits non-canonical dictionary order. This skips only the raw-byte ordering assertion: received order is preserved in the returned `Map`, while duplicate keys and every other malformed input remain invalid.
 
 Valid UTF-8 byte strings become `string`; invalid UTF-8 byte strings become `Uint8Array`. Dictionaries always become `Map`. Invalid UTF-8 dictionary keys are therefore available directly as byte arrays.
 
@@ -103,10 +104,11 @@ type BencodeValue = BencodeInteger | BencodeByteString | BencodeList | BencodeDi
 interface DecodeOptions {
   maxBytes?: number
   maxDepth?: number
+  allowUnsortedKeys?: boolean
 }
 ```
 
-默认 `maxBytes` 为 `64 * 1024 * 1024`，`maxDepth` 为 `1000`。合法 UTF-8 字节串返回 `string`，无效 UTF-8 字节串返回 `Uint8Array`，字典始终返回 `Map`。
+默认 `maxBytes` 为 `64 * 1024 * 1024`，`maxDepth` 为 `1000`，`allowUnsortedKeys` 为 `false`，因此默认严格检查规范顺序。仅为兼容已知会产生无序字典的协议实现时才应设为 `true`；它只跳过原始字节顺序断言，仍拒绝重复键和其他所有格式错误，并按接收顺序生成 `Map`。合法 UTF-8 字节串返回 `string`，无效 UTF-8 字节串返回 `Uint8Array`，字典始终返回 `Map`。
 
 ### 错误类型
 

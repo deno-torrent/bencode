@@ -20,10 +20,20 @@ export interface DecodeOptions {
   maxBytes?: number;
   /** Maximum nested list/dictionary depth. Defaults to 1000. */
   maxDepth?: number;
+  /**
+   * Accept dictionary keys that are not sorted by their raw bytes.
+   *
+   * Defaults to `false`. Enable only for compatibility with known protocol
+   * implementations that produce non-canonical dictionaries. Duplicate keys
+   * and all other malformed input are still rejected.
+   */
+  allowUnsortedKeys?: boolean;
 }
 
 /**
- * Decode one complete canonical Bencode value.
+ * Decode one complete Bencode value. By default, the input must be canonical;
+ * `allowUnsortedKeys` may be enabled for compatibility with implementations
+ * that emit non-canonical dictionary ordering.
  *
  * Valid UTF-8 byte strings become strings. Invalid UTF-8 strings and binary
  * dictionary keys remain `Uint8Array` values.
@@ -52,7 +62,11 @@ export function decode(
     );
   }
 
-  const [value, nextOffset] = _decodeOne(data, maxDepth);
+  const [value, nextOffset] = _decodeOne(
+    data,
+    maxDepth,
+    options.allowUnsortedKeys === true,
+  );
   if (nextOffset !== data.length) {
     throw new BencodeDecodeError(
       `unexpected trailing data at offset ${nextOffset}`,
@@ -79,6 +93,7 @@ interface _DictFrame {
 function _decodeOne(
   data: Uint8Array,
   maxDepth: number,
+  allowUnsortedKeys: boolean,
 ): [BencodeValue, number] {
   const stack: _Frame[] = [];
   let offset = 0;
@@ -130,6 +145,7 @@ function _decodeOne(
           throw new BencodeDecodeError("duplicate dictionary key");
         }
         if (
+          !allowUnsortedKeys &&
           frame.previousKeyBytes &&
           _compareBytes(frame.previousKeyBytes, keyBytes) > 0
         ) {

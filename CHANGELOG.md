@@ -1,5 +1,12 @@
 # 变更日志 / Changelog
 
+## 2.0.1
+
+### Added
+
+- Added the opt-in decoder option `allowUnsortedKeys` for compatibility with known protocol implementations that emit non-canonical dictionary ordering.
+- Compatibility mode preserves received `Map` order while continuing to reject duplicate keys, malformed input, trailing data, and resource-limit violations.
+
 ## 2.0.0
 
 ### Breaking changes

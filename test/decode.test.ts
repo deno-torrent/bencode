@@ -84,9 +84,44 @@ Deno.test("decode: binary dictionary keys remain Uint8Array", () => {
   assertEquals(item, 1);
 });
 
-Deno.test("decode: duplicate and unsorted dictionary keys throw", () => {
-  assertThrows(() => decode(enc("d1:ai1e1:ai2ee")), BencodeDecodeError);
-  assertThrows(() => decode(enc("d1:bi1e1:ai2ee")), BencodeDecodeError);
+Deno.test("decode: unsorted dictionary keys are rejected by default", () => {
+  assertThrows(
+    () => decode(enc("d1:b1:x1:a1:ye")),
+    BencodeDecodeError,
+    "dictionary keys are not sorted by raw bytes",
+  );
+});
+
+Deno.test("decode: unsorted dictionary keys can be allowed explicitly", () => {
+  assertEquals(
+    decode(enc("d1:b1:x1:a1:ye"), { allowUnsortedKeys: true }),
+    new Map([["b", "x"], ["a", "y"]]),
+  );
+});
+
+Deno.test("decode: duplicate keys remain invalid when unsorted keys are allowed", () => {
+  assertThrows(
+    () => decode(enc("d1:a1:x1:a1:ye"), { allowUnsortedKeys: true }),
+    BencodeDecodeError,
+    "duplicate dictionary key",
+  );
+});
+
+Deno.test("decode: compatibility mode still rejects malformed input", () => {
+  for (
+    const value of [
+      "d1:ai01ee",
+      "d1:a01:xe",
+      "d1:a2:xe",
+      "d1:a1:xe1:x",
+      "d1:axe",
+    ]
+  ) {
+    assertThrows(
+      () => decode(enc(value), { allowUnsortedKeys: true }),
+      BencodeDecodeError,
+    );
+  }
 });
 
 Deno.test("decode: duplicate binary dictionary keys throw", () => {
@@ -140,6 +175,76 @@ Deno.test("decode: resource limits are enforced", () => {
     BencodeDecodeError,
   );
   assertEquals(decode(enc("le"), { maxDepth: 0 }), []);
+});
+
+Deno.test("decode: compatibility mode still enforces resource limits", () => {
+  const unsorted = enc("d1:b1:x1:a1:ye");
+  assertThrows(
+    () =>
+      decode(unsorted, {
+        allowUnsortedKeys: true,
+        maxBytes: unsorted.length - 1,
+      }),
+    BencodeDecodeError,
+  );
+  assertThrows(
+    () =>
+      decode(enc("d1:bd1:b1:x1:a1:yee"), {
+        allowUnsortedKeys: true,
+        maxDepth: 0,
+      }),
+    BencodeDecodeError,
+  );
+});
+
+Deno.test("decode: libtorrent-style KRPC response preserves binary fields", () => {
+  const ip = new Uint8Array([0x43, 0xd7, 0x3a, 0x52, 0x63, 0x39]);
+  const id = new Uint8Array([
+    0xff,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+  ]);
+  const transactionId = new Uint8Array([0xfe, 0x00]);
+  const data = new Uint8Array([
+    ...enc("d2:ip6:"),
+    ...ip,
+    ...enc("1:rd2:id20:"),
+    ...id,
+    ...enc("e1:t2:"),
+    ...transactionId,
+    ...enc("1:y1:r1:v4:LT\x01\x02e"),
+  ]);
+
+  assertThrows(
+    () => decode(data),
+    BencodeDecodeError,
+    "dictionary keys are not sorted by raw bytes",
+  );
+
+  const response = decode(data, { allowUnsortedKeys: true }) as BencodeDict;
+  assertEquals([...response.keys()], ["ip", "r", "t", "y", "v"]);
+  assertEquals(response.get("ip"), ip);
+  assertEquals((response.get("r") as BencodeDict).get("id"), id);
+  assertEquals(response.get("t"), transactionId);
+  assertEquals(response.get("y"), "r");
+  assertEquals(response.get("v"), "LT\x01\x02");
 });
 
 Deno.test("decode: invalid resource limits throw", () => {

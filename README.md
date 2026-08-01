@@ -54,7 +54,7 @@ type BencodeKey = string | Uint8Array
 type BencodeDict = Map<BencodeKey, BencodeValue>
 ```
 
-Dictionary entries are encoded in raw byte order. Decoder output is canonical and rejects trailing data, invalid integers, unsorted keys, duplicate keys, excessive nesting, and oversized input.
+Dictionary entries are always encoded in raw byte order. Decoding is strict by default and rejects trailing data, invalid integers, unsorted keys, duplicate keys, excessive nesting, and oversized input.
 
 Binary dictionary keys are returned directly as `Uint8Array`; the 1.x `BYTE_KEY_PREFIX`, `isByteKey`, and `byteKeyToUint8Array` compatibility API no longer exists.
 
@@ -62,7 +62,9 @@ Binary dictionary keys are returned directly as `Uint8Array`; the 1.x `BYTE_KEY_
 
 `encode(value)` supports safe integers, strings, `Uint8Array`, arrays, and `Map` dictionaries. Plain objects, floating-point numbers, cycles, invalid keys, and byte-equivalent duplicate keys throw `BencodeEncodeError`.
 
-`decode(data, options?)` returns strings for valid UTF-8 byte strings and `Uint8Array` for invalid UTF-8 strings. Dictionaries are always returned as `Map` instances. Malformed, truncated, unsorted, duplicated, or oversized input throws `BencodeDecodeError`.
+`decode(data, options?)` returns strings for valid UTF-8 byte strings and `Uint8Array` for invalid UTF-8 strings. Dictionaries are always returned as `Map` instances. Malformed, truncated, unsorted, duplicated, or oversized input throws `BencodeDecodeError` by default.
+
+For compatibility with known protocol implementations that emit dictionaries in non-canonical order, use `decode(data, { allowUnsortedKeys: true })`. This option only disables the raw-byte key-order assertion: it does not sort or re-encode the input, and the returned `Map` preserves received order. Duplicate keys and all other malformed input remain invalid. Keep the default strict mode for inputs expected to be canonical.
 
 ### Migration from 1.x
 
@@ -172,7 +174,9 @@ for (const [key, value] of files) {
 }
 ```
 
-对于普通对象、不安全数字、循环容器、非法字典键和编码后等价的重复键，编码器抛出 `BencodeEncodeError`。对于尾随数据、非法整数、错误长度、无序键、重复键、嵌套过深或输入过大，解码器抛出 `BencodeDecodeError`。
+对于普通对象、不安全数字、循环容器、非法字典键和编码后等价的重复键，编码器抛出 `BencodeEncodeError`。解码器默认严格遵守规范；对于尾随数据、非法整数、错误长度、无序键、重复键、嵌套过深或输入过大，解码器抛出 `BencodeDecodeError`。
+
+仅在兼容已知会生成无序字典的协议实现时使用 `decode(data, { allowUnsortedKeys: true })`。此选项只关闭原始字节键顺序断言，不会排序或重新编码输入，返回的 `Map` 保留接收顺序；重复键及其他格式错误仍会被拒绝。
 
 ### 资源限制
 
