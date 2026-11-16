@@ -8,8 +8,9 @@ import {
   type BencodeValue,
 } from "./types.ts";
 
-const _tdFatal = new TextDecoder("utf-8", { fatal: true });
-const _tdLossy = new TextDecoder("utf-8");
+// Bencode byte strings and integer tokens treat a BOM as data, not a signature.
+const _tdFatal = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+const _tdLossy = new TextDecoder("utf-8", { ignoreBOM: true });
 const _te = new TextEncoder();
 const _defaultMaxDecodeBytes = 64 * 1024 * 1024;
 const _defaultMaxDepth = 1000;
@@ -35,8 +36,9 @@ export interface DecodeOptions {
  * `allowUnsortedKeys` may be enabled for compatibility with implementations
  * that emit non-canonical dictionary ordering.
  *
- * Valid UTF-8 byte strings become strings. Invalid UTF-8 strings and binary
- * dictionary keys remain `Uint8Array` values.
+ * Valid UTF-8 byte strings become strings, preserving a leading U+FEFF (BOM)
+ * in values and dictionary keys. Invalid UTF-8 strings and binary dictionary
+ * keys remain `Uint8Array` values.
  *
  * @throws {BencodeDecodeError} If the input is malformed, non-canonical, or exceeds a limit.
  */

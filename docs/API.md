@@ -41,6 +41,8 @@ Defaults are `maxBytes = 64 * 1024 * 1024`, `maxDepth = 1000`, and `allowUnsorte
 
 Valid UTF-8 byte strings become `string`; invalid UTF-8 byte strings become `Uint8Array`. Dictionaries always become `Map`. Invalid UTF-8 dictionary keys are therefore available directly as byte arrays.
 
+A leading UTF-8 BOM (`EF BB BF`) is preserved as `U+FEFF` in decoded strings and dictionary keys. Key ordering and duplicate detection include those bytes, so `"a"` and `"\uFEFFa"` are distinct keys. Integer tokens accept only canonical ASCII digits and an optional minus sign; a BOM in an integer is invalid in both strict and compatibility modes.
+
 ## Errors
 
 - `BencodeEncodeError`: caller value cannot be represented or would produce an ambiguous encoding.
@@ -109,6 +111,8 @@ interface DecodeOptions {
 ```
 
 默认 `maxBytes` 为 `64 * 1024 * 1024`，`maxDepth` 为 `1000`，`allowUnsortedKeys` 为 `false`，因此默认严格检查规范顺序。仅为兼容已知会产生无序字典的协议实现时才应设为 `true`；它只跳过原始字节顺序断言，仍拒绝重复键和其他所有格式错误，并按接收顺序生成 `Map`。合法 UTF-8 字节串返回 `string`，无效 UTF-8 字节串返回 `Uint8Array`，字典始终返回 `Map`。
+
+字符串和字典键开头的 UTF-8 BOM（`EF BB BF`）会保留为 `U+FEFF`。键排序和重复检测包含这些字节，因此 `"a"` 和 `"\uFEFFa"` 是不同的键。整数只接受规范的 ASCII 数字及可选负号；严格模式和兼容模式都拒绝含 BOM 的整数。
 
 ### 错误类型
 
