@@ -64,6 +64,8 @@ Binary dictionary keys are returned directly as `Uint8Array`; the 1.x `BYTE_KEY_
 
 `decode(data, options?)` returns strings for valid UTF-8 byte strings and `Uint8Array` for invalid UTF-8 strings. Dictionaries are always returned as `Map` instances. Malformed, truncated, unsorted, duplicated, or oversized input throws `BencodeDecodeError` by default.
 
+A leading UTF-8 BOM is preserved as `U+FEFF` in strings and dictionary keys, including during key ordering and duplicate checks. Integer tokens containing a BOM are invalid.
+
 For compatibility with known protocol implementations that emit dictionaries in non-canonical order, use `decode(data, { allowUnsortedKeys: true })`. This option only disables the raw-byte key-order assertion: it does not sort or re-encode the input, and the returned `Map` preserves received order. Duplicate keys and all other malformed input remain invalid. Keep the default strict mode for inputs expected to be canonical.
 
 ### Migration from 1.x
@@ -163,7 +165,11 @@ console.log(decoded.get('announce'))
 | Array | List | 递归编码元素 |
 | `Map` | Dictionary | 按原始编码字节排序键 |
 
-合法 UTF-8 字节串解码为 `string`，无效 UTF-8 字节串解码为 `Uint8Array`，字典始终解码为 `Map`。二进制字典键可通过 `key instanceof Uint8Array` 判断：
+合法 UTF-8 字节串解码为 `string`，无效 UTF-8 字节串解码为 `Uint8Array`，字典始终解码为 `Map`。
+
+字符串和字典键开头的 UTF-8 BOM 会保留为 `U+FEFF`，键排序和重复检测也包含这些字节。含 BOM 的整数属于非法输入。
+
+二进制字典键可通过 `key instanceof Uint8Array` 判断：
 
 ```ts
 const response = decode(data) as Map<string, unknown>

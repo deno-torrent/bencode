@@ -1,5 +1,10 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { BencodeDecodeError, type BencodeDict, decode } from "../mod.ts";
+import {
+  BencodeDecodeError,
+  type BencodeDict,
+  decode,
+  encode,
+} from "../mod.ts";
 
 const te = new TextEncoder();
 const enc = (value: string) => te.encode(value);
@@ -26,6 +31,26 @@ Deno.test("decode: invalid integers throw", () => {
   }
 });
 
+Deno.test("decode: BOM is invalid in integers", () => {
+  for (
+    const value of [
+      "i\uFEFF42e",
+      "i\uFEFF0e",
+      "i\uFEFF-42e",
+      "i-\uFEFF42e",
+      "i42\uFEFFe",
+    ]
+  ) {
+    for (const allowUnsortedKeys of [false, true]) {
+      assertThrows(
+        () => decode(enc(value), { allowUnsortedKeys }),
+        BencodeDecodeError,
+        "invalid integer",
+      );
+    }
+  }
+});
+
 Deno.test("decode: trailing data throws", () => {
   assertThrows(() => decode(enc("i1ei2e")), BencodeDecodeError);
 });
@@ -38,6 +63,14 @@ Deno.test("decode: strings preserve UTF-8 and invalid bytes", () => {
     decode(new Uint8Array([50, 58, 0xff, 0xfe])),
     new Uint8Array([0xff, 0xfe]),
   );
+});
+
+Deno.test("decode: leading UTF-8 BOM is preserved in strings", () => {
+  for (const value of ["\uFEFF", "\uFEFFhello", "\uFEFF\uFEFFhello"]) {
+    const data = enc(`${enc(value).length}:${value}`);
+    assertEquals(decode(data), value);
+    assertEquals(encode(decode(data)), data);
+  }
 });
 
 Deno.test("decode: malformed strings throw", () => {
@@ -73,6 +106,45 @@ Deno.test("decode: dictionaries become Maps", () => {
 
 Deno.test("decode: empty dictionary becomes an empty Map", () => {
   assertEquals(decode(enc("de")), new Map());
+});
+
+Deno.test("decode: leading UTF-8 BOM is preserved in dictionary keys", () => {
+  for (const key of ["\uFEFF", "\uFEFFa"]) {
+    const data = enc(`d${enc(key).length}:${key}i1ee`);
+    assertEquals(decode(data), new Map([[key, 1]]));
+    assertEquals(encode(decode(data)), data);
+  }
+});
+
+Deno.test("decode: BOM dictionary keys retain canonical raw-byte order", () => {
+  const data = enc("d1:bi1e4:\uFEFFai2ee");
+  assertEquals(decode(data), new Map([["b", 1], ["\uFEFFa", 2]]));
+  assertEquals(encode(decode(data)), data);
+});
+
+Deno.test("decode: BOM and non-BOM dictionary keys remain distinct", () => {
+  for (const allowUnsortedKeys of [false, true]) {
+    assertEquals(
+      decode(enc("d1:ai1e4:\uFEFFai2ee"), { allowUnsortedKeys }),
+      new Map([["a", 1], ["\uFEFFa", 2]]),
+    );
+    assertThrows(
+      () => decode(enc("d4:\uFEFFai1e4:\uFEFFai2ee"), { allowUnsortedKeys }),
+      BencodeDecodeError,
+      "duplicate dictionary key",
+    );
+  }
+});
+
+Deno.test("decode: unsorted BOM dictionary keys require compatibility mode", () => {
+  const data = enc("d4:\uFEFFai1e1:bi2ee");
+  assertThrows(
+    () => decode(data),
+    BencodeDecodeError,
+    "dictionary keys are not sorted by raw bytes",
+  );
+  const value = decode(data, { allowUnsortedKeys: true }) as BencodeDict;
+  assertEquals([...value.entries()], [["\uFEFFa", 1], ["b", 2]]);
 });
 
 Deno.test("decode: binary dictionary keys remain Uint8Array", () => {

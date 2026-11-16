@@ -1,5 +1,18 @@
 # 变更日志 / Changelog
 
+## 2.0.2
+
+### Fixed
+
+- Preserve a leading UTF-8 BOM (`U+FEFF`) in decoded byte strings and dictionary keys instead of silently stripping it.
+- Use complete key bytes, including a leading BOM, for canonical ordering and duplicate detection; compatibility mode also preserves BOM-prefixed keys and their identity.
+- Reject malformed integer tokens containing a BOM, such as `i<U+FEFF>42e`.
+- Add six BOM regression tests covering byte-preserving round trips, canonical and non-canonical key ordering, distinct and duplicate keys, and invalid integers. Fixes [#1](https://github.com/deno-torrent/bencode/issues/1).
+
+### Compatibility
+
+- No API changes. Callers that relied on BOM stripping must explicitly remove `U+FEFF` in their application; `allowUnsortedKeys` still skips only dictionary ordering validation.
+
 ## 2.0.1
 
 ### Added
